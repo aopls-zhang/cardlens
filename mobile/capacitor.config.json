@@ -1,0 +1,12 @@
+{
+  "appId": "com.cardscan.app",
+  "appName": "名片扫描",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}

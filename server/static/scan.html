@@ -1,0 +1,109 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (C) 2026 aopls-zhang -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>扫码连接</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  video{width:100%;height:100%;object-fit:cover;display:block}
+  #box{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+       width:64vw;max-width:300px;aspect-ratio:1;border-radius:16px;
+       border:2px solid rgba(255,255,255,.75);box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+  #tip{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top));transform:translateX(-50%);
+       max-width:90vw;background:rgba(17,24,39,.8);color:#fff;font-size:13.5px;
+       padding:9px 15px;border-radius:999px;text-align:center}
+  #tip.ok{background:#16a34a}
+  #tip.err{background:#dc2626}
+  #back{position:fixed;left:0;right:0;bottom:0;padding:16px 20px calc(20px + env(safe-area-inset-bottom));
+        background:linear-gradient(to top,rgba(0,0,0,.7),transparent)}
+  #back button{width:100%;background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:12px;
+               padding:13px;font:inherit;font-weight:600}
+</style>
+</head>
+<body>
+<video id="v" autoplay playsinline muted></video>
+<div id="box"></div>
+<div id="tip">正在启动相机…</div>
+<div id="back">
+  <button id="btnManual" style="background:rgba(255,255,255,.1);margin-bottom:8px">手动输入地址</button>
+  <button id="btnBack">返回</button>
+</div>
+
+<script>
+window.onerror = function(m, s, l){
+  var t = document.getElementById("tip");
+  if (t){ t.textContent = "错误：" + m; t.className = "err"; }
+  return false;
+};
+
+(function(){
+  var tip = document.getElementById("tip");
+  var video = document.getElementById("v");
+  var stopped = false;
+
+  function setTip(msg, cls){ tip.textContent = msg; tip.className = cls || ""; }
+
+  function done(data){
+    if (stopped) return;
+    var m = String(data).match(/https?:\/\/[^\s"'<>]+/);
+    if (!m){ setTip("这不是连接二维码", "err"); return; }
+    stopped = true;
+    var url = m[0].replace(/\/+$/, "");
+    localStorage.setItem("apiBase", url);
+    setTip("已连接 " + url, "ok");
+    setTimeout(function(){ location.href = "/"; }, 700);
+  }
+
+  async function start(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      setTip("当前环境不支持相机", "err");
+      return;
+    }
+    var stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {facingMode: {ideal: "environment"}, width: {ideal: 1280}}, audio: false
+      });
+    } catch(e){
+      setTip("拿不到相机权限：" + (e && e.name ? e.name : ""), "err");
+      return;
+    }
+    video.srcObject = stream;
+    await video.play();
+
+    if (!("BarcodeDetector" in window)){
+      setTip("设备不支持二维码识别，请手动填写地址", "err");
+      return;
+    }
+    var detector = new BarcodeDetector({formats: ["qr_code"]});
+    setTip("把电脑上的二维码放进框里");
+
+    setInterval(async function(){
+      if (stopped || video.readyState < 2) return;
+      try {
+        var codes = await detector.detect(video);
+        if (codes && codes.length && codes[0].rawValue) done(codes[0].rawValue);
+      } catch(e){ /* 单帧失败忽略 */ }
+    }, 300);
+  }
+
+  document.getElementById("btnBack").onclick = function(){ location.href = "/"; };
+  document.getElementById("btnManual").onclick = function(){
+    var v = prompt("服务器地址（例如 http://192.168.1.5:17800）",
+                   localStorage.getItem("apiBase") || "http://");
+    if (!v) return;
+    v = v.trim().replace(new RegExp("/+$"), "");
+    if (!v) return;
+    localStorage.setItem("apiBase", v);
+    location.href = "/";
+  };
+  start();
+})();
+</script>
+</body>
+</html>

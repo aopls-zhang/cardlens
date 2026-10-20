@@ -1,0 +1,1243 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f7f8fa">
+<title>名片扫描</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#fff; --fg:#111827; --sub:#6b7280;
+    --line:#e5e7eb; --pri:#2563eb; --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0 auto;max-width:430px;background:var(--bg);color:var(--fg);
+       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       padding-bottom:calc(76px + env(safe-area-inset-bottom));
+       box-shadow:0 0 0 1px var(--line)}
+  header{position:sticky;top:0;z-index:10;background:rgba(247,248,250,.92);
+         backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--line);
+         padding:14px 16px calc(10px + env(safe-area-inset-top))}
+  .hrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  h1{font-size:17px;margin:0;font-weight:600;white-space:nowrap}
+  .hright{display:flex;align-items:center;gap:10px;flex:none}
+  .stat{font-size:12px;color:#4b5563;font-weight:500;display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--bad)}
+  .dot.on{background:var(--ok)}
+  #btnLang{background:#eef2f7;color:var(--pri);border-radius:8px;padding:5px 9px;font-size:12px;font-weight:600}
+  main{padding:12px}
+  .empty{text-align:center;color:var(--sub);padding:60px 20px;font-size:14px;line-height:1.8}
+  .item{background:var(--card);border-radius:14px;padding:10px;margin-bottom:10px;
+        display:flex;gap:12px;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,.04);
+        border:1px solid var(--line);position:relative}
+  .rm{position:absolute;right:6px;top:6px;width:26px;height:26px;border-radius:50%;
+      background:#f3f4f6;color:#6b7280;font-size:15px;line-height:1;padding:0;
+      display:flex;align-items:center;justify-content:center;z-index:2}
+  .rm:active{background:#e5e7eb}
+  .dit .rm{position:static;transform:none;flex:none}
+  .tbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .addsec{margin-bottom:18px}
+  .addh{font-size:12.5px;color:var(--sub);margin:0 0 8px}
+  .seg{display:flex;gap:8px;margin-bottom:16px}
+  .seg button{flex:1;padding:11px 0;border-radius:10px;background:#eef2f7;
+              font-size:14px;font-weight:600;color:#4b5563}
+  .seg button.on{background:var(--pri);color:#fff}
+  .qrwrap{background:#fff;border:1px solid var(--line);border-radius:16px;
+          padding:20px 16px;text-align:center}
+  .qrtitle{font-size:14px;font-weight:600;margin-bottom:12px}
+  .qrwrap img{width:min(220px,60vw);height:auto;display:block;margin:0 auto;border-radius:10px}
+  .qrurl{font-size:12px;color:var(--sub);margin-top:10px;word-break:break-all}
+  .qrtip{font-size:11.5px;color:#9ca3af;line-height:1.7;margin-top:8px}
+  .tbar .sp{flex:1}
+  .mini.danger{background:#fee2e2;color:#b91c1c}
+  .tcnt{font-size:12px;color:var(--sub)}
+  .ck{width:20px;height:20px;flex:none;border:1.5px solid #cbd5e1;border-radius:6px;
+      display:flex;align-items:center;justify-content:center;background:#fff}
+  .ck::after{content:"";width:10px;height:10px;border-radius:3px;background:transparent}
+  .item.sel,.dit.sel{background:#eff6ff;border-color:#bfdbfe}
+  .item.sel .ck,.dit.sel .ck{background:var(--pri);border-color:var(--pri)}
+  .item.sel .ck::after,.dit.sel .ck::after{background:#fff}
+  .thumb{width:76px;height:48px;border-radius:8px;object-fit:cover;background:#eee;flex:none}
+  .meta{min-width:0;flex:1}
+  .name{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .co{font-size:12.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:6px;margin-top:4px}
+  .t-queued{background:#eff6ff;color:#1d4ed8}
+  .t-ocr_done{background:#ecfdf5;color:#047857}
+  .t-failed{background:#fef2f2;color:#b91c1c}
+  .bar{position:fixed;left:50%;transform:translateX(-50%);width:100%;max-width:430px;bottom:0;z-index:20;display:flex;gap:10px;
+       padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+       background:rgba(255,255,255,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line)}
+  button{font:inherit;border:0;border-radius:12px;padding:13px 16px;font-weight:600;cursor:pointer}
+  .btn-pri{background:var(--pri);color:#fff;flex:1}
+  .btn-sec{background:#eef2f7;color:var(--fg);flex:1}
+  button:active{transform:scale(.985)}
+  #review{position:fixed;left:50%;transform:translateX(-50%);top:0;bottom:0;width:100%;max-width:430px;z-index:50;background:var(--bg);display:none;flex-direction:column;box-shadow:0 0 0 1px var(--line)}
+  #review.on{display:flex}
+  .rv-top{display:flex;align-items:center;gap:12px;padding:12px 14px calc(10px + env(safe-area-inset-top));
+          border-bottom:1px solid var(--line);background:#fff}
+  .rv-top .back{background:none;padding:6px 8px;font-size:15px;color:var(--pri)}
+  .rv-body{flex:1;overflow:auto;padding:12px}
+  .shot{width:100%;border-radius:12px;background:#000;display:block;max-height:38vh;object-fit:contain}
+  .form{margin-top:14px;background:#fff;border-radius:14px;border:1px solid var(--line);overflow:hidden}
+  .row{display:grid;grid-template-columns:56px minmax(0,1fr) 46px;gap:8px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row label{font-size:13px;color:var(--sub)}
+  .row input,.row textarea{border:0;outline:0;font:inherit;background:transparent;resize:none;min-width:0;width:auto;padding:4px 0}
+  .row textarea{height:44px;line-height:1.4}
+  .sc{font-size:10.5px;line-height:1.4;padding:1px 6px;border-radius:4px;display:inline-block;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .s-hi{background:#ecfdf5;color:#047857}
+  .s-mid{background:#fffbeb;color:#b45309}
+  .s-lo{background:#fef2f2;color:#b91c1c}
+  .rv-foot{display:flex;gap:10px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+           background:#fff;border-top:1px solid var(--line)}
+  .btn-danger{background:#fee2e2;color:#b91c1c}
+  #btnSave:disabled{background:#c7d2fe;color:#fff;cursor:default}
+  .grp{border-top:8px solid var(--bg);padding:6px 0 2px}
+  .grp-h{display:flex;align-items:center;justify-content:space-between;padding:6px 12px 2px;
+         font-size:12.5px;color:var(--sub)}
+  .mini{background:#eff6ff;color:var(--pri);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600}
+  .ch-row,.cu-row{grid-template-columns:74px minmax(0,1fr) 34px}
+  .ch-kind{font:inherit;font-size:13px;border:0;background:#f3f4f6;border-radius:7px;padding:4px 4px;color:#374151;min-width:0}
+  .cu-k{color:var(--sub);font-size:13px}
+  .del{background:none;color:#9ca3af;font-size:18px;line-height:1;padding:4px}
+  .row input::placeholder{color:#c7cbd1}
+  .tabs{display:flex;gap:8px;margin:0;padding:10px 16px 0;background:var(--bg)}
+  .tab{flex:1;background:#eef2f7;color:#4b5563;border-radius:9px;padding:7px 0;
+       font-size:13.5px;font-weight:600}
+  .tab.on{background:var(--pri);color:#fff}
+  #pendCount{font-weight:500;opacity:.75}
+  .searchbar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .searchbar input{flex:1;border:1px solid var(--line);background:#fff;border-radius:11px;
+                   padding:10px 13px;font:inherit;font-size:14px;outline:0}
+  .searchbar input:focus{border-color:var(--pri)}
+  #qtotal{font-size:12px;color:var(--sub);white-space:nowrap}
+  .dit{background:#fff;border-radius:13px;border:1px solid var(--line);padding:11px 13px;
+       margin-bottom:9px;cursor:pointer;display:flex;align-items:center;gap:10px}
+  .dc{flex:1;min-width:0}
+  .dit .t{font-weight:600;font-size:14.5px}
+  .dit .s{font-size:12.5px;color:var(--sub);margin-top:2px;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #detail{position:fixed;inset:0;z-index:60;background:rgba(17,24,39,.45);display:none;
+          align-items:flex-end;justify-content:center;padding:0}
+  #detail.on{display:flex}
+  @media (min-width:1040px){
+    /* 宽屏：详情从右侧滑出，不遮挡列表，接近两栏工作台 */
+    #detail{align-items:stretch;justify-content:flex-end;background:rgba(17,24,39,.18)}
+    .dbox{max-width:440px;max-height:none;height:100vh;border-radius:0;
+          box-shadow:-10px 0 34px rgba(0,0,0,.10)}
+    .dhead{padding-top:18px}
+  }
+  .dhead{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;
+         background:#fff;border-bottom:1px solid var(--line);font-weight:600;font-size:15px}
+  .dhead button{background:none;font-size:22px;line-height:1;color:#9ca3af;padding:0 4px}
+  .dbody{overflow:auto;padding:14px 16px 22px}
+  .dsec{margin-bottom:16px}
+  .dsec h4{margin:0 0 7px;font-size:12px;color:var(--sub);font-weight:600;letter-spacing:.4px}
+  .drow{display:flex;gap:10px;padding:6px 0;font-size:14px;align-items:baseline}
+  .drow .k{width:66px;flex:none;font-size:12.5px;color:var(--sub)}
+  .drow .v{flex:1;word-break:break-all}
+  .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#111827;color:#fff;
+         padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:99}
+  .toast.on{opacity:1}
+  body.native{padding-left:0 !important;max-width:430px !important;margin:0 auto !important;box-shadow:none !important}
+  body.native .tabs{position:static !important;width:auto !important;height:auto !important;flex-direction:row !important;padding:10px 16px 0 !important;border-right:0 !important;background:var(--bg) !important}
+  body.native .tab{flex:1 !important;text-align:center !important;padding:7px 0 !important}
+  body.native .bar{left:50% !important;transform:translateX(-50%) !important;max-width:430px !important}
+  body.native #review{left:50% !important;transform:translateX(-50%) !important;max-width:430px !important}
+  body.native [data-tab="add"]{display:none !important}
+
+  /* 手机屏幕小：把可点区域放大到 44px 以上 */
+  @media (max-width:1039px){
+    #btnSettings,#btnLang{min-width:54px;min-height:54px;font-size:20px;padding:0 14px;
+                          display:inline-flex;align-items:center;justify-content:center;border-radius:14px}
+    .hrow h1{font-size:19px}
+    .tab{min-height:56px;font-size:16px;display:flex;align-items:center;justify-content:center;border-radius:12px}
+    .rv-top .back{min-height:52px;padding:10px 14px;font-size:16px}
+    .mini{min-height:44px;padding:10px 16px;font-size:14px}
+    .rm{width:38px;height:38px;font-size:19px}
+    .bar button{min-height:60px;font-size:16px}
+    .rv-foot button{min-height:60px;font-size:16px}
+    .row{padding:12px}
+    .row label{font-size:14px}
+    .ch-kind{min-height:40px}
+  }
+  body.native #btnSettings,body.native #btnLang{min-width:54px;min-height:54px;font-size:20px}
+  body.native .tab{min-height:56px;font-size:16px}
+  #offbanner{display:none;position:fixed;left:50%;top:0;transform:translateX(-50%);
+             width:100%;max-width:430px;z-index:70;background:#dc2626;color:#fff;
+             font-size:13px;font-weight:600;text-align:center;padding:10px 12px;
+             padding-top:calc(10px + env(safe-area-inset-top))}
+  #errbar{display:none;position:fixed;left:0;right:0;top:0;z-index:99;
+          background:#7f1d1d;color:#fff;font-size:11.5px;padding:8px 12px;
+          padding-bottom:calc(8px + env(safe-area-inset-bottom));word-break:break-all}
+
+  /* PC 端扫码入口 */
+  #qrbox{position:fixed;right:28px;top:50%;transform:translateY(-50%);width:248px;
+         background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 16px 14px;
+         display:none;box-shadow:0 10px 34px rgba(0,0,0,.09);text-align:center;z-index:30}
+  @media (min-width:1200px){ #qrbox{display:block;right:16px;width:220px} }
+  #qrbox .qr-title{font-size:14px;font-weight:600;margin-bottom:10px}
+  #qrbox img{width:100%;height:auto;display:block;margin:0 auto;border-radius:8px}
+  #qrbox .qr-url{font-size:11.5px;color:var(--sub);margin-top:8px;word-break:break-all;font-variant-numeric:tabular-nums}
+  #qrbox .qr-tip{font-size:11px;color:#9ca3af;line-height:1.6;margin-top:8px}
+  #qrbox button{margin-top:10px;width:100%;background:#eef2f7;color:#374151;border-radius:10px;
+                padding:9px;font-size:12.5px;font-weight:500}
+
+  /* 宽屏：左侧固定模块导航 */
+  @media (min-width:1040px){
+    body{max-width:none;padding-left:208px;box-shadow:none}
+    header{padding-left:0}
+    .hrow{max-width:560px;margin:0 auto;width:100%}
+    main{max-width:560px;margin:0 auto;padding:16px 0}
+    .tabs{position:fixed;left:0;top:0;bottom:0;width:208px;margin:0;
+          flex-direction:column;justify-content:flex-start;gap:8px;padding:24px 14px;
+          background:#fff;border-right:1px solid var(--line);z-index:40}
+    .tab{width:100%;flex:0 0 auto;text-align:left;padding:12px 14px;font-size:14px}
+    .bar{left:208px;right:0;transform:none;max-width:560px;margin:0 auto}
+    #review{left:calc(50% + 104px);max-width:560px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <h1 data-i18n="app.title">名片扫描</h1>
+    <div class="hright">
+      <button id="btnSettings" style="background:#eef2f7;color:#4b5563;border-radius:8px;padding:5px 9px;font-size:14px">⚙</button>
+      <button id="btnLang">简</button>
+      <div class="stat"><span class="dot" id="dot"></span><span id="stat"></span></div>
+    </div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab" data-tab="pending">待处理<span id="pendCount"></span></button>
+  <button class="tab on" data-tab="db">联系人</button>
+  <button class="tab" data-tab="add">链接方式</button>
+</div>
+
+<main>
+  <div id="list"></div>
+  <div id="paneDb" style="display:none">
+    <div class="searchbar">
+      <input id="q" placeholder="搜索姓名 / 公司 / 号码 / 微信">
+      <span id="qtotal"></span>
+    </div>
+    <div id="dbList"></div>
+  </div>
+  <div id="paneAdd" style="display:none">
+    <div class="addsec">
+      <div class="addh">1. 选择手机系统</div>
+      <div class="seg" id="segOs">
+        <button data-os="android" class="on">Android</button>
+        <button data-os="ios">iOS</button>
+      </div>
+      <div class="addh">2. 选择使用方式</div>
+      <div class="seg" id="segMode">
+        <button data-mode="web" class="on">网页版</button>
+        <button data-mode="app">安装 App</button>
+      </div>
+    </div>
+    <div class="qrwrap">
+      <div class="qrtitle" id="qrTitle">手机扫码打开</div>
+      <img id="addQr" alt="扫码">
+      <div class="qrurl" id="qrUrl"></div>
+      <div class="qrtip" id="qrTip"></div>
+    </div>
+
+    <div class="addh" style="margin-top:24px">已有 App？扫码自动连接</div>
+    <div class="qrwrap">
+      <img id="pairQr" alt="配对码">
+      <div class="qrtip">手机上打开 App，点顶部红色横幅「未连接服务器」，<br>扫这张码即可自动填好地址。</div>
+    </div>
+  </div>
+</main>
+
+<div id="offbanner">未连接服务器 · 点这里设置地址</div>
+<div id="errbar"></div>
+
+<div id="detail">
+  <div class="dbox">
+    <div class="dhead"><span id="dTitle"></span><button id="dClose">×</button></div>
+    <div id="dBody" class="dbody"></div>
+  </div>
+</div>
+
+<div class="bar">
+  <button class="btn-sec" id="btnGal" data-i18n="btn.gallery">从相册导入</button>
+  <button class="btn-pri" id="btnCam" data-i18n="btn.camera">拍照</button>
+</div>
+
+<div id="review">
+  <div class="rv-top">
+    <button class="back" id="btnBack" data-i18n="btn.back">‹ 返回</button>
+    <div style="font-weight:600;font-size:15px" id="rvTitle"></div>
+  </div>
+  <div class="rv-body">
+    <img class="shot" id="rvImg" alt="">
+    <div class="form" id="rvForm"></div>
+  </div>
+  <div class="rv-foot">
+    <button class="btn-danger" id="btnDiscard" data-i18n="btn.discard">丢弃</button>
+    <button class="btn-pri" id="btnSave" data-i18n="btn.save">保存并入库</button>
+  </div>
+</div>
+
+<input id="cam" type="file" accept="image/*" capture="environment" hidden>
+<input id="gal" type="file" accept="image/*" multiple hidden>
+<div class="toast" id="toast"></div>
+
+<script>
+window.onerror = function(m, s, l){
+  var el = document.getElementById("errbar");
+  if (el){ el.textContent = "JS 错误：" + m + " @行" + l; el.style.display = "block"; }
+  return false;
+};
+window.onerror = function(m, s, l){
+  var el = document.getElementById("errbar");
+  if (el){ el.textContent = "JS 错误：" + m + " @行" + l; el.style.display = "block"; }
+  return false;
+};
+var I18N = {
+  zh: {
+    "app.title": "名片扫描",
+    "stat.pending": "待核对 {n}",
+    "stat.offline": "未连接",
+    "empty": "还没有待核对的名片<br>拍一张，或从相册导入",
+    "btn.camera": "拍照",
+    "btn.gallery": "从相册导入",
+    "btn.back": "‹ 返回",
+    "btn.save": "保存并入库",
+    "btn.discard": "丢弃",
+    "review.title": "核对",
+    "review.failed": "识别失败 · 手动录入",
+    "status.queued": "识别中",
+    "status.ocr_done": "待核对",
+    "status.failed": "识别失败",
+    "status.done": "已入库",
+    "field.name": "姓名",
+    "field.company": "公司",
+    "field.title": "职位",
+    "field.dept": "部门",
+    "sec.channels": "联系方式",
+    "sec.custom": "补充信息",
+    "btn.add": "添加",
+    "ph.field": "字段名",
+    "field.other": "其他",
+    "field.phone": "手机",
+    "field.fax": "传真",
+    "field.qq": "QQ",
+    "field.telegram": "Telegram",
+    "field.line": "LINE",
+    "field.skype": "Skype",
+    "field.dingtalk": "钉钉",
+    "field.feishu": "飞书",
+    "field.wechat": "微信",
+    "field.whatsapp": "WhatsApp",
+    "field.tel": "电话",
+    "field.email": "邮箱",
+    "field.address": "地址",
+    "field.web": "网址",
+    "field.note": "备注",
+    "toast.uploading": "上传 {n} 张…",
+    "toast.queued": "已入队 {n}",
+    "toast.dup": "，重复跳过 {n}",
+    "toast.full": "，队列已满 {n}",
+    "toast.saved": "已入库",
+    "toast.need": "姓名、公司、手机至少填一项",
+    "toast.savefail": "保存失败：",
+    "toast.uploadfail": "上传失败：",
+    "toast.discardq": "丢弃这张名片？临时图片会被删除。",
+    "toast.discardfail": "操作失败",
+    "toast.langswitched": "界面语言已切换"
+  },
+  tw: {
+    "app.title": "名片掃描",
+    "stat.pending": "待核對 {n}",
+    "stat.offline": "未連線",
+    "empty": "還沒有待核對的名片<br>拍一張，或從相簿匯入",
+    "btn.camera": "拍照",
+    "btn.gallery": "從相簿匯入",
+    "btn.back": "‹ 返回",
+    "btn.save": "儲存並入庫",
+    "btn.discard": "丟棄",
+    "review.title": "核對",
+    "review.failed": "辨識失敗 · 手動輸入",
+    "status.queued": "辨識中",
+    "status.ocr_done": "待核對",
+    "status.failed": "辨識失敗",
+    "status.done": "已入庫",
+    "field.name": "姓名",
+    "field.company": "公司",
+    "field.title": "職稱",
+    "field.dept": "部門",
+    "sec.channels": "聯絡方式",
+    "sec.custom": "補充資訊",
+    "btn.add": "新增",
+    "ph.field": "欄位名",
+    "field.other": "其他",
+    "field.phone": "手機",
+    "field.fax": "傳真",
+    "field.qq": "QQ",
+    "field.telegram": "Telegram",
+    "field.line": "LINE",
+    "field.skype": "Skype",
+    "field.dingtalk": "釘釘",
+    "field.feishu": "飛書",
+    "field.wechat": "微信",
+    "field.whatsapp": "WhatsApp",
+    "field.tel": "電話",
+    "field.email": "信箱",
+    "field.address": "地址",
+    "field.web": "網址",
+    "field.note": "備註",
+    "toast.uploading": "上傳 {n} 張…",
+    "toast.queued": "已入列 {n}",
+    "toast.dup": "，重複略過 {n}",
+    "toast.full": "，佇列已滿 {n}",
+    "toast.saved": "已入庫",
+    "toast.need": "姓名、公司、手機至少填一項",
+    "toast.savefail": "儲存失敗：",
+    "toast.uploadfail": "上傳失敗：",
+    "toast.discardq": "丟棄這張名片？暫存圖片會被刪除。",
+    "toast.discardfail": "操作失敗",
+    "toast.langswitched": "介面語言已切換"
+  },
+  en: {
+    "app.title": "Card Scanner",
+    "stat.pending": "{n} to review",
+    "stat.offline": "Offline",
+    "empty": "No cards waiting<br>Take a photo or import from gallery",
+    "btn.camera": "Camera",
+    "btn.gallery": "Import",
+    "btn.back": "‹ Back",
+    "btn.save": "Save",
+    "btn.discard": "Discard",
+    "review.title": "Review",
+    "review.failed": "OCR failed · enter manually",
+    "status.queued": "Recognizing",
+    "status.ocr_done": "To review",
+    "status.failed": "Failed",
+    "status.done": "Saved",
+    "field.name": "Name",
+    "field.company": "Company",
+    "field.title": "Title",
+    "field.dept": "Dept.",
+    "sec.channels": "Channels",
+    "sec.custom": "Extra info",
+    "btn.add": "Add",
+    "ph.field": "Field",
+    "field.other": "Other",
+    "field.phone": "Mobile",
+    "field.fax": "Fax",
+    "field.qq": "QQ",
+    "field.telegram": "Telegram",
+    "field.line": "LINE",
+    "field.skype": "Skype",
+    "field.dingtalk": "DingTalk",
+    "field.feishu": "Feishu",
+    "field.wechat": "WeChat",
+    "field.whatsapp": "WhatsApp",
+    "field.tel": "Tel",
+    "field.email": "Email",
+    "field.address": "Address",
+    "field.web": "Website",
+    "field.note": "Note",
+    "toast.uploading": "Uploading {n}…",
+    "toast.queued": "{n} queued",
+    "toast.dup": ", {n} duplicate skipped",
+    "toast.full": ", queue full: {n}",
+    "toast.saved": "Saved",
+    "toast.need": "Name, company or mobile is required",
+    "toast.savefail": "Save failed: ",
+    "toast.uploadfail": "Upload failed: ",
+    "toast.discardq": "Discard this card? The temp image will be deleted.",
+    "toast.discardfail": "Operation failed",
+    "toast.langswitched": "Language switched"
+  }
+};
+
+var LANGS = ["zh", "tw", "en"];
+
+function detectLang(){
+  var saved = localStorage.getItem("lang");
+  if(saved && I18N[saved]) return saved;
+  var n = (navigator.language || "zh").toLowerCase();
+  if(n.indexOf("zh") === 0){
+    return (n.indexOf("tw") >= 0 || n.indexOf("hk") >= 0 || n.indexOf("hant") >= 0) ? "tw" : "zh";
+  }
+  return n.indexOf("en") === 0 ? "en" : "en";
+}
+
+var isNative = false;
+try {
+  isNative = !!(window.Capacitor
+    && typeof window.Capacitor.isNativePlatform === "function"
+    && window.Capacitor.isNativePlatform());
+} catch (e) { isNative = false; }
+if (isNative) document.body.classList.add("native");
+
+var lang = detectLang();
+var urlLang = new URLSearchParams(location.search).get("lang");
+if(urlLang && I18N[urlLang]) lang = urlLang;
+
+function t(key, vars){
+  var s = (I18N[lang] && I18N[lang][key]) || I18N.zh[key] || key;
+  if(vars){ for(var k in vars){ s = s.split("{" + k + "}").join(vars[k]); } }
+  return s;
+}
+
+function applyI18n(){
+  document.documentElement.lang = lang === "en" ? "en" : (lang === "tw" ? "zh-Hant" : "zh-Hans");
+  var els = document.querySelectorAll("[data-i18n]");
+  for(var i = 0; i < els.length; i++){
+    els[i].innerHTML = t(els[i].getAttribute("data-i18n"));
+  }
+  document.getElementById("btnLang").textContent = lang === "zh" ? "简" : (lang === "tw" ? "繁" : "EN");
+  document.title = t("app.title");
+  render();
+}
+
+function setLang(next){
+  lang = next;
+  localStorage.setItem("lang", next);
+  applyI18n();
+  if(cur){ openReview(cur.id); }
+  toast(t("toast.langswitched"));
+}
+
+var items = [], cur = null, timer = null, toastTimer = null, form = null;
+
+function $(id){ return document.getElementById(id); }
+function toast(msg){
+  var el = $("toast"); el.textContent = msg; el.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(function(){ el.classList.remove("on"); }, 1800);
+}
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];
+  });
+}
+
+var API_BASE = (localStorage.getItem("apiBase") || "").replace(new RegExp("/+$"), "");
+
+async function api(path, opt){
+  var r = await fetch(API_BASE + path, opt || {});
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+function configureServer(){
+  var cur = localStorage.getItem("apiBase") || "";
+  var v = prompt("服务器地址（例如 http://192.168.1.5:17800）", cur || "http://");
+  if(v === null) return;
+  v = v.trim().replace(new RegExp("/+$"), "");
+  if(!v) return;
+  localStorage.setItem("apiBase", v);
+  location.reload();
+}
+
+function setOnline(ok){
+  $("dot").classList.toggle("on", ok);
+  $("stat").textContent = ok ? t("stat.pending", {n: items.length}) : t("stat.offline");
+  var ob = $("offbanner");
+  if (ob) ob.style.display = ok ? "none" : "block";
+  var ob = $("offbanner");
+  if (ob) ob.style.display = ok ? "none" : "block";
+  var pc = $("pendCount");
+  if (pc) pc.textContent = items.length ? " (" + items.length + ")" : "";
+}
+
+var tab = "pending";
+
+function switchTab(t){
+  tab = t;
+  var btns = document.querySelectorAll(".tab");
+  for (var i = 0; i < btns.length; i++){
+    btns[i].classList.toggle("on", btns[i].getAttribute("data-tab") === t);
+  }
+  $("list").style.display = t === "pending" ? "" : "none";
+  $("paneDb").style.display = t === "db" ? "" : "none";
+  $("paneAdd").style.display = t === "add" ? "" : "none";
+  if (t === "db") loadDb();
+  if (t === "add") renderAdd();
+}
+
+function kindName(k){
+  for (var i = 0; i < CHANNEL_KINDS.length; i++){
+    if (CHANNEL_KINDS[i][0] === k) return t(CHANNEL_KINDS[i][1]);
+  }
+  return k;
+}
+
+async function dropPending(id){
+  if (!confirm("丢弃这条？临时图片会被删除。")) return;
+  try {
+    await api("/api/pending/" + id + "/discard", {method: "POST"});
+    refresh();
+  } catch(e){ toast("删除失败"); }
+}
+
+async function dropContact(id){
+  if (!confirm("从联系人库删除这条？")) return;
+  try {
+    await api("/api/contacts/" + id, {method: "DELETE"});
+    loadDb();
+    if (cur && cur.id === id) closeReview();
+  } catch(e){ toast("删除失败"); }
+}
+
+async function loadDb(){
+  var q = $("q").value.trim();
+  try {
+    var d = await api("/api/contacts?q=" + encodeURIComponent(q));
+    $("qtotal").textContent = (d.total || 0) + " 条";
+    var el = $("dbList");
+    if (!d.items.length){
+      el.innerHTML = '<div class="empty">没有匹配的联系人</div>';
+      return;
+    }
+    el.innerHTML = toolbar("db", d.items.length) + d.items.map(function(c){
+      var sub = [c.company, (c.phones || [])[0], (c.wechat || [])[0]].filter(Boolean).join(" · ");
+      var on = manage.db && sel.db[c.id];
+      return '<div class="dit' + (on ? " sel" : "") + '" data-id="' + c.id + '">' +
+             (manage.db ? '<div class="ck"></div>' : "") +
+             '<div class="dc"><div class="t">' + esc(c.name || "(未命名)") + "</div>" +
+             '<div class="s">' + esc(sub) + "</div></div>" +
+             (manage.db ? "" : '<button class="rm" data-rm-contact="' + c.id + '">×</button>') +
+             "</div>";
+    }).join("");
+    bindManage("db", d.items.map(function(x){ return x.id; }), loadDb);
+    var nodes = el.querySelectorAll(".dit");
+    for (var i = 0; i < nodes.length; i++){
+      nodes[i].onclick = function(e){
+        if (manage.db){
+          var sid = this.getAttribute("data-id");
+          if (sel.db[sid]) delete sel.db[sid]; else sel.db[sid] = true;
+          loadDb();
+          return;
+        }
+        if (e.target && e.target.getAttribute && e.target.getAttribute("data-rm-contact")) return;
+        openContact(this.getAttribute("data-id"));
+      };
+    }
+    var rms = el.querySelectorAll("[data-rm-contact]");
+    for (var j = 0; j < rms.length; j++){
+      rms[j].onclick = function(e){
+        e.stopPropagation();
+        dropContact(this.getAttribute("data-rm-contact"));
+      };
+    }
+  } catch(e){ $("qtotal").textContent = "加载失败"; }
+}
+
+async function openContact(id){
+  try {
+    var d = await api("/api/contacts/" + id);
+    $("dTitle").textContent = d.name || t("field.name");
+    var h = "";
+    var sub = [d.company, d.title, d.dept].filter(Boolean).join(" · ");
+    h += '<div class="dsec"><div class="drow"><span class="v">' + esc(sub || "—") + "</span></div></div>";
+    if (d.channels && d.channels.length){
+      h += '<div class="dsec"><h4>' + t("sec.channels") + "</h4>";
+      d.channels.forEach(function(c){
+        h += '<div class="drow"><span class="k">' + esc(kindName(c.kind)) +
+             '</span><span class="v">' + esc(c.value) + "</span></div>";
+      });
+      h += "</div>";
+    }
+    var ck = Object.keys(d.custom || {});
+    if (ck.length){
+      h += '<div class="dsec"><h4>' + t("sec.custom") + "</h4>";
+      ck.forEach(function(k){
+        h += '<div class="drow"><span class="k">' + esc(k) + '</span><span class="v">' +
+             esc(d.custom[k]) + "</span></div>";
+      });
+      h += "</div>";
+    }
+    if (d.note){
+      h += '<div class="dsec"><h4>' + t("field.note") + '</h4><div class="drow"><span class="v">' +
+           esc(d.note) + "</span></div></div>";
+    }
+    $("dBody").innerHTML = h;
+    $("detail").classList.add("on");
+    document.body.classList.add("detail-open");
+  } catch(e){ toast("加载失败"); }
+}
+
+async function refresh(){
+  try{
+    var d = await api("/api/pending");
+    items = (d.items || []).filter(function(x){ return x.status !== "done"; });
+    setOnline(true);
+    render();
+    // 核对页打开时 OCR 可能还没跑完，结果到了就自动补填
+    if (cur && !cur.result) {
+      var fresh = items.filter(function(x){ return x.id === cur.id; })[0];
+      if (fresh && fresh.result) { openReview(fresh.id); }
+    }
+    if(openId && !openTried && items.length){ openTried = true; openReview(openId); }
+  }catch(e){ setOnline(false); }
+}
+
+var manage = {pending: false, db: false};
+var sel = {pending: {}, db: {}};
+
+function toolbar(kind, total){
+  if (!manage[kind]){
+    return '<div class="tbar"><span class="sp"></span>' +
+      (kind === "pending" ? '<button class="mini" id="btnFlush">补传</button>' : "") +
+      (kind === "db" ? '<button class="mini" id="btnManual">+ 手动添加</button>' : "") +
+      '<button class="mini" data-manage="' + kind + '">管理</button></div>';
+  }
+  var cnt = Object.keys(sel[kind]).length;
+  return '<div class="tbar">' +
+    '<button class="mini" data-selall="' + kind + '">' + (cnt === total ? "取消全选" : "全选") + "</button>" +
+    '<span class="tcnt">已选 ' + cnt + '</span><span class="sp"></span>' +
+    '<button class="mini danger" data-batchdel="' + kind + '">删除</button>' +
+    '<button class="mini" data-manage="' + kind + '">完成</button></div>';
+}
+
+function bindManage(kind, ids, reload){
+  var mb = document.querySelector('[data-manage="' + kind + '"]');
+  if (mb) mb.onclick = function(){
+    manage[kind] = !manage[kind];
+    sel[kind] = {};
+    reload();
+  };
+  var mb2 = document.getElementById("btnManual");
+  if (mb2) mb2.onclick = openManual;
+  var fb2 = document.getElementById("btnFlush");
+  if (fb2) fb2.onclick = async function(){
+    var n = await outboxCount();
+    if (!n){ toast("本地没有待补传的照片"); return; }
+    toast("补传 " + n + " 张…");
+    await flushQueue();
+  };
+  var sb = document.querySelector('[data-selall="' + kind + '"]');
+  if (sb) sb.onclick = function(){
+    if (Object.keys(sel[kind]).length === ids.length) sel[kind] = {};
+    else { sel[kind] = {}; ids.forEach(function(i){ sel[kind][i] = true; }); }
+    reload();
+  };
+  var db = document.querySelector('[data-batchdel="' + kind + '"]');
+  if (db) db.onclick = function(){
+    var chosen = Object.keys(sel[kind]);
+    if (!chosen.length){ toast("先选中要删除的条目"); return; }
+    if (!confirm("删除选中的 " + chosen.length + " 条？")) return;
+    var url = kind === "pending" ? "/api/pending/batch/discard" : "/api/contacts/batch/delete";
+    fetch(API_BASE + url, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ids: chosen})
+    }).then(function(r){ return r.json(); }).then(function(){
+      sel[kind] = {};
+      reload();
+    }).catch(function(){ toast("删除失败"); });
+  };
+}
+
+function render(){
+  var el = $("list");
+  if(!items.length){
+    el.innerHTML = '<div class="empty">' + t("empty") +
+      (API_BASE ? '' : '<br><span style="font-size:12.5px">未连接服务器 · 点右上角 ⚙ 设置地址</span>') + '</div>';
+    return;
+  }
+  el.innerHTML = toolbar("pending", items.length) + items.map(function(it){
+    var r = (it.result && it.result.fields) || {};
+    var nm = r.name || "…";
+    var co = r.company || "";
+    var on = manage.pending && sel.pending[it.id];
+    return '<div class="item' + (on ? " sel" : "") + '" data-id="' + it.id + '">' +
+      (manage.pending ? '<div class="ck"></div>' : "") +
+      '<img class="thumb" src="' + API_BASE + it.image_url + '" alt="">' +
+      '<div class="meta"><div class="name">' + esc(nm) + '</div>' +
+      '<div class="co">' + esc(co) + '</div>' +
+      '<span class="tag t-' + it.status + '">' + t("status." + it.status) + '</span></div>' +
+      (manage.pending ? "" : '<button class="rm" data-rm-pending="' + it.id + '">×</button>') +
+      '</div>';
+  }).join("");
+  bindManage("pending", items.map(function(x){ return x.id; }), function(){ render(); });
+  var nodes = el.querySelectorAll(".item");
+  for(var i = 0; i < nodes.length; i++){
+    nodes[i].onclick = function(e){
+      if (manage.pending){
+        var sid = this.getAttribute("data-id");
+        if (sel.pending[sid]) delete sel.pending[sid]; else sel.pending[sid] = true;
+        render();
+        return;
+      }
+      if (e.target && e.target.getAttribute && e.target.getAttribute("data-rm-pending")) return;
+      openReview(this.getAttribute("data-id"));
+    };
+  }
+  var rms = el.querySelectorAll("[data-rm-pending]");
+  for(var j = 0; j < rms.length; j++){
+    rms[j].onclick = function(e){
+      e.stopPropagation();
+      dropPending(this.getAttribute("data-rm-pending"));
+    };
+  }
+}
+
+function confClass(v){
+  if(v == null) return ["", ""];
+  if(v >= 0.9) return ["s-hi", v.toFixed(2)];
+  if(v >= 0.7) return ["s-mid", v.toFixed(2)];
+  return ["s-lo", v.toFixed(2)];
+}
+
+function fld(labelKey, id, value, conf, multi){
+  var c = confClass(conf);
+  var arr = Array.isArray(value) ? value : (value == null || value === "" ? [] : [value]);
+  var input = multi
+    ? '<textarea id="' + id + '">' + esc(arr.join("\n")) + '</textarea>'
+    : '<input id="' + id + '" value="' + esc(value || "") + '">';
+  return '<div class="row"><label>' + esc(t(labelKey)) + '</label>' + input +
+         (c[0] ? '<span class="sc ' + c[0] + '">' + c[1] + '</span>' : '') + '</div>';
+}
+
+var formMode = "review";
+
+function openManual(){
+  formMode = "create";
+  cur = null;
+  $("rvImg").style.display = "none";
+  $("rvTitle").textContent = "手动添加";
+  $("btnSave").disabled = false;
+  $("btnSave").textContent = t("btn.save");
+  initForm({});
+  renderForm();
+  $("review").classList.add("on");
+}
+
+function openReview(id){
+  var it = items.filter(function(x){ return x.id === id; })[0];
+  if(!it){
+    // 列表还没加载到这条（比如刚上传完跳过来），单独拉一次
+    api("/api/pending/" + encodeURIComponent(id)).then(function(d){
+      if (!d || !d.id) return;
+      items.unshift(d);
+      openReview(id);
+    }).catch(function(){});
+    return;
+  }
+  cur = it;
+  var r = it.result || {};
+  var f = r.fields || {};
+  var cf = f._conf || {};
+  var running = it.status === "queued";
+  formMode = "review";
+  $("rvImg").style.display = "";
+  $("rvImg").src = API_BASE + it.image_url + "?t=" + Date.now();
+  $("rvTitle").textContent = running ? "识别中…"
+      : (it.status === "failed" ? t("review.failed") : t("review.title"));
+  $("btnSave").disabled = running;
+  $("btnSave").textContent = running ? "识别中…" : t("btn.save");
+  initForm(f, r.qr);
+  renderForm();
+  $("review").classList.add("on");
+}
+
+var CHANNEL_KINDS = [
+  ["mobile", "field.phone"], ["tel", "field.tel"], ["fax", "field.fax"],
+  ["wechat", "field.wechat"], ["qq", "field.qq"], ["whatsapp", "field.whatsapp"],
+  ["telegram", "field.telegram"], ["line", "field.line"], ["skype", "field.skype"],
+  ["dingtalk", "field.dingtalk"], ["feishu", "field.feishu"],
+  ["email", "field.email"], ["web", "field.web"],
+  ["address", "field.address"], ["other", "field.other"]
+];
+
+function initForm(f, qr){
+  var qrList = qr || [];
+  form = {name: f.name || "", title: f.title || "",
+          dept: f.dept || "", note: f.note || "", conf: f._conf || {},
+          companies: (f.companies && f.companies.length) ? f.companies.slice()
+                     : (f.company ? [f.company] : []),
+          channels: [], custom: []};
+  var add = function(kind, vals){
+    (vals || []).forEach(function(v){ if (v) form.channels.push({kind: kind, value: v}); });
+  };
+  add("mobile", f.phones); add("tel", f.tels); add("fax", f.fax);
+  add("wechat", f.wechat); add("qq", f.qq); add("whatsapp", f.whatsapp);
+  add("telegram", f.telegram); add("line", f.line); add("skype", f.skype);
+  add("dingtalk", f.dingtalk); add("feishu", f.feishu);
+  add("email", f.emails); add("web", f.urls);
+  add("address", (f.addresses && f.addresses.length) ? f.addresses : (f.address ? [f.address] : []));
+  if (!form.channels.length) form.channels.push({kind: "mobile", value: ""});
+  qrList.forEach(function(v){ if (v) form.custom.push({k: "二维码", v: v}); });
+}
+
+function kindOptions(cur){
+  return CHANNEL_KINDS.map(function(k){
+    return '<option value="' + k[0] + '"' + (k[0] === cur ? " selected" : "") + ">" +
+           esc(t(k[1])) + "</option>";
+  }).join("");
+}
+
+function renderForm(){
+  var h = "";
+  h += fld("field.name", "f-name", form.name, form.conf.name);
+  h += fld("field.company", "f-company", form.companies, form.conf.company, true);
+  h += fld("field.title", "f-title", form.title, form.conf.title);
+  h += fld("field.dept", "f-dept", form.dept, null);
+
+  h += '<div class="grp"><div class="grp-h"><span>' + t("sec.channels") +
+       '</span><button class="mini" id="addCh">+ ' + t("btn.add") + "</button></div>";
+  form.channels.forEach(function(c, i){
+    h += '<div class="row ch-row"><select class="ch-kind">' + kindOptions(c.kind) + "</select>" +
+         '<input class="ch-val" value="' + esc(c.value) + '">' +
+         '<button class="del" data-del-ch="' + i + '">×</button></div>';
+  });
+  h += "</div>";
+
+  h += '<div class="grp"><div class="grp-h"><span>' + t("sec.custom") +
+       '</span><button class="mini" id="addCu">+ ' + t("btn.add") + "</button></div>";
+  form.custom.forEach(function(c, i){
+    h += '<div class="row cu-row"><input class="cu-k" placeholder="' + t("ph.field") +
+         '" value="' + esc(c.k) + '"><input class="cu-v" value="' + esc(c.v) + '">' +
+         '<button class="del" data-del-cu="' + i + '">×</button></div>';
+  });
+  h += "</div>";
+
+  h += fld("field.note", "f-note", form.note, null);
+  $("rvForm").innerHTML = h;
+  bindForm();
+}
+
+function syncForm(){
+  if (!form) return;
+  form.name = $("f-name").value;
+  form.companies = lines("f-company");
+  form.title = $("f-title").value;
+  form.dept = $("f-dept").value;
+  form.note = $("f-note").value;
+  var rows = document.querySelectorAll(".ch-row");
+  for (var i = 0; i < rows.length && i < form.channels.length; i++){
+    form.channels[i].kind = rows[i].querySelector(".ch-kind").value;
+    form.channels[i].value = rows[i].querySelector(".ch-val").value;
+  }
+  var cus = document.querySelectorAll(".cu-row");
+  for (var j = 0; j < cus.length && j < form.custom.length; j++){
+    form.custom[j].k = cus[j].querySelector(".cu-k").value;
+    form.custom[j].v = cus[j].querySelector(".cu-v").value;
+  }
+}
+
+function bindForm(){
+  $("addCh").onclick = function(){
+    syncForm();
+    form.channels.push({kind: "mobile", value: ""});
+    renderForm();
+  };
+  $("addCu").onclick = function(){
+    syncForm();
+    form.custom.push({k: "", v: ""});
+    renderForm();
+  };
+  var dels = document.querySelectorAll("[data-del-ch]");
+  for (var i = 0; i < dels.length; i++){
+    dels[i].onclick = function(){
+      syncForm();
+      form.channels.splice(+this.getAttribute("data-del-ch"), 1);
+      if (!form.channels.length) form.channels.push({kind: "mobile", value: ""});
+      renderForm();
+    };
+  }
+  var delc = document.querySelectorAll("[data-del-cu]");
+  for (var j = 0; j < delc.length; j++){
+    delc[j].onclick = function(){
+      syncForm();
+      form.custom.splice(+this.getAttribute("data-del-cu"), 1);
+      renderForm();
+    };
+  }
+}
+
+function closeReview(){
+  $("review").classList.remove("on");
+  cur = null;
+  formMode = "review";
+}
+
+function lines(id){
+  return $(id).value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
+}
+
+async function save(){
+  if(!cur && formMode !== "create") return;
+  syncForm();
+  var channels = form.channels
+    .filter(function(c){ return (c.value || "").trim(); })
+    .map(function(c){ return {kind: c.kind, value: c.value.trim()}; });
+  var custom = {};
+  form.custom.forEach(function(c){
+    var k = (c.k || "").trim(), v = (c.v || "").trim();
+    if (k && v) custom[k] = v;
+  });
+  var comps = form.companies.filter(function(x){ return x && x.trim(); });
+  var payload = {
+    name: (form.name || "").trim() || null,
+    company: comps.length ? comps[0].trim() : null,
+    companies: comps.map(function(x){ return x.trim(); }),
+    title: (form.title || "").trim() || null,
+    dept: (form.dept || "").trim() || null,
+    note: (form.note || "").trim() || null,
+    channels: channels,
+    custom: custom
+  };
+  if(!payload.name && !payload.company && !channels.length){
+    toast(t("toast.need")); return;
+  }
+  try{
+    if (formMode === "create"){
+      await api("/api/contacts/create", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      toast(t("toast.saved"));
+      closeReview();
+      loadDb();
+      return;
+    }
+    await api("/api/pending/" + cur.id + "/confirm", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+    toast(t("toast.saved"));
+    closeReview();
+    refresh();
+  }catch(e){ toast(t("toast.savefail") + e.message); }
+}
+
+async function discard(){
+  if(!cur) return;
+  if(!confirm(t("toast.discardq"))) return;
+  try{
+    await api("/api/pending/" + cur.id + "/discard", {method: "POST"});
+    closeReview(); refresh();
+  }catch(e){ toast(t("toast.discardfail")); }
+}
+
+// 离线暂存：识别在电脑上做，断网时先把照片存起来，联网后自动补传
+function openDB(){
+  return new Promise(function(res, rej){
+    var r = indexedDB.open("cardscan", 1);
+    r.onupgradeneeded = function(e){
+      e.target.result.createObjectStore("outbox", {autoIncrement: true});
+    };
+    r.onsuccess = function(e){ res(e.target.result); };
+    r.onerror = function(){ rej(r.error); };
+  });
+}
+
+async function queueFiles(files, source){
+  var db = await openDB();
+  var tx = db.transaction("outbox", "readwrite");
+  var st = tx.objectStore("outbox");
+  for (var i = 0; i < files.length; i++){
+    st.add({blob: files[i], source: source, ts: Date.now()});
+  }
+  await new Promise(function(res){ tx.oncomplete = res; });
+  updateOutboxBadge();
+}
+
+async function flushQueue(){
+  var db;
+  try { db = await openDB(); } catch(e){ return; }
+  var tx = db.transaction("outbox", "readonly");
+  var st = tx.objectStore("outbox");
+  var rows = await new Promise(function(res){ var q = st.getAll(); q.onsuccess = function(){ res(q.result); }; });
+  var keys = await new Promise(function(res){ var q = st.getAllKeys(); q.onsuccess = function(){ res(q.result); }; });
+  if (!rows.length) return;
+  toast("正在补传 " + rows.length + " 张…");
+  for (var i = 0; i < rows.length; i++){
+    var fd = new FormData();
+    fd.append("files", rows[i].blob, "offline.jpg");
+    try {
+      await api("/api/ingest?source=" + (rows[i].source || "gallery"), {method: "POST", body: fd});
+      var dtx = db.transaction("outbox", "readwrite");
+      dtx.objectStore("outbox").delete(keys[i]);
+      await new Promise(function(res){ dtx.oncomplete = res; });
+    } catch(e){
+      toast("补传失败：" + (e && e.message ? e.message : "网络错误"));
+      break;
+    }
+  }
+  updateOutboxBadge();
+  refresh();
+}
+
+async function outboxCount(){
+  try {
+    var db = await openDB();
+    var tx = db.transaction("outbox", "readonly");
+    var q = tx.objectStore("outbox").count();
+    return await new Promise(function(res){ q.onsuccess = function(){ res(q.result); }; });
+  } catch(e){ return 0; }
+}
+
+async function updateOutboxBadge(){
+  try {
+    var n = await outboxCount();
+    var el = $("stat");
+    if (!el) return;
+    if (n > 0) el.textContent = "离线暂存 " + n;
+    else el.textContent = t("stat.pending", {n: items.length});
+  } catch(e){}
+}
+
+window.addEventListener("online", function(){ flushQueue(); });
+document.addEventListener("visibilitychange", function(){
+  if (!document.hidden) flushQueue();
+});
+
+async function upload(files, source){
+  if(!files.length) return;
+  var fd = new FormData();
+  for(var i = 0; i < files.length; i++) fd.append("files", files[i]);
+  toast(t("toast.uploading", {n: files.length}));
+  try{
+    var r = await api("/api/ingest?source=" + source, {method: "POST", body: fd});
+    var its = r.items || [];
+    var ok = its.filter(function(x){ return x.status === "queued"; }).length;
+    var dup = its.filter(function(x){ return x.status === "duplicate"; }).length;
+    var full = its.filter(function(x){ return x.status === "queue_full"; }).length;
+    var msg = t("toast.queued", {n: ok});
+    if(dup) msg += t("toast.dup", {n: dup});
+    if(full) msg += t("toast.full", {n: full});
+    toast(msg);
+    refresh();
+  }catch(e){
+    try {
+      await queueFiles(files, source);
+      var total = await outboxCount();
+      toast("已暂存，本地共 " + total + " 张待补传");
+    } catch(err){
+      toast(t("toast.uploadfail") + e.message);
+    }
+  }
+}
+
+$("btnCam").onclick = function(){
+  // App 的 WebView 在 http://localhost 下不算安全上下文，getUserMedia 会被拒，
+  // 所以原生壳里直接用系统相机；浏览器在 HTTPS/localhost 下才进出实时取景页。
+  if (isNative){
+    $("cam").click();
+    return;
+  }
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.isSecureContext){
+    location.href = "/capture";
+  } else {
+    $("cam").click();
+  }
+};
+$("btnGal").onclick = function(){ $("gal").click(); };
+$("cam").onchange = function(e){ upload([].slice.call(e.target.files), "camera"); e.target.value = ""; };
+$("gal").onchange = function(e){ upload([].slice.call(e.target.files), "gallery"); e.target.value = ""; };
+$("btnBack").onclick = closeReview;
+$("btnSave").onclick = save;
+$("btnDiscard").onclick = discard;
+$("btnSettings").onclick = configureServer;
+$("offbanner").onclick = function(){
+  // App 里直接扫码，省得手输 IP
+  if (isNative) location.href = "/scan.html";
+  else configureServer();
+};
+var qTimer = null;
+$("q").oninput = function(){ clearTimeout(qTimer); qTimer = setTimeout(loadDb, 300); };
+function closeDetail(){
+  $("detail").classList.remove("on");
+  document.body.classList.remove("detail-open");
+}
+$("dClose").onclick = closeDetail;
+$("detail").onclick = function(e){ if (e.target === this) closeDetail(); };
+var tabBtns = document.querySelectorAll(".tab");
+for (var ti = 0; ti < tabBtns.length; ti++){
+  tabBtns[ti].onclick = function(){ switchTab(this.getAttribute("data-tab")); };
+}
+
+var addState = {os: "android", mode: "web"};
+
+function renderAdd(){
+  var os = document.querySelectorAll("#segOs button");
+  for (var i = 0; i < os.length; i++){
+    os[i].classList.toggle("on", os[i].getAttribute("data-os") === addState.os);
+  }
+  var md = document.querySelectorAll("#segMode button");
+  for (var j = 0; j < md.length; j++){
+    md[j].classList.toggle("on", md[j].getAttribute("data-mode") === addState.mode);
+  }
+  var img = $("addQr");
+  var pq = $("pairQr");
+  if (pq) pq.src = "/api/qr?target=http&t=" + Date.now();
+  if (addState.os === "ios" && addState.mode === "app"){
+    img.style.display = "none";
+    $("qrTitle").textContent = "iOS 暂未提供 App";
+    $("qrUrl").textContent = "";
+    $("qrTip").textContent = "iPhone 请改用网页版：Safari 扫码即可，无需安装。";
+    return;
+  }
+  img.style.display = "";
+  var target = addState.mode === "app" ? "app" : "web";
+  img.src = "/api/qr?target=" + target + "&t=" + Date.now();
+  $("qrTitle").textContent = addState.mode === "app" ? "扫码下载 Android App" : "扫码打开网页版";
+  $("qrTip").textContent = addState.mode === "app"
+    ? "下载后安装，首次需允许「安装未知应用」。"
+    : "首次打开会提示证书不安全，点「高级 / 显示详细信息」→ 继续前往。";
+  fetch("/api/netinfo").then(function(r){ return r.json(); }).then(function(d){
+    $("qrUrl").textContent = addState.mode === "app" ? d.http + "/app.apk" : d.https + "/";
+  }).catch(function(){ $("qrUrl").textContent = ""; });
+}
+
+(function(){
+  var os = document.querySelectorAll("#segOs button");
+  for (var i = 0; i < os.length; i++){
+    os[i].onclick = function(){
+      addState.os = this.getAttribute("data-os");
+      renderAdd();
+    };
+  }
+  var md = document.querySelectorAll("#segMode button");
+  for (var j = 0; j < md.length; j++){
+    md[j].onclick = function(){
+      addState.mode = this.getAttribute("data-mode");
+      renderAdd();
+    };
+  }
+})();
+$("btnLang").onclick = function(){
+  var i = LANGS.indexOf(lang);
+  setLang(LANGS[(i + 1) % LANGS.length]);
+};
+
+// 默认进联系人库：打开网站先看到已有的名片，而不是一个空的待处理页
+// 拍照回来（?open=）时才默认回待处理
+var openId = new URLSearchParams(location.search).get("open");
+var openTried = false;
+var urlTab = new URLSearchParams(location.search).get("tab");
+var urlContact = new URLSearchParams(location.search).get("contact");
+
+applyI18n();
+refresh();
+switchTab(urlTab || (openId ? "pending" : "db"));
+timer = setInterval(refresh, 2500);
+setTimeout(flushQueue, 1200);
+setInterval(flushQueue, 30000);
+
+if (urlContact) setTimeout(function(){ openContact(urlContact); }, 900);
+
+if (new URLSearchParams(location.search).get("manual") === "1"){
+  setTimeout(openManual, 600);
+}
+
+// 便于截图/演示：?manage=1 直接进管理模式
+if (new URLSearchParams(location.search).get("manage") === "1"){
+  manage.pending = true;
+  items.forEach(function(x){ sel.pending[x.id] = true; });
+  render();
+}
+</script>
+</body>
+</html>

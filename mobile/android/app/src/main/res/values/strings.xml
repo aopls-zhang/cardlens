@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">名片扫描</string>
+    <string name="title_activity_main">名片扫描</string>
+    <string name="package_name">com.cardscan.app</string>
+    <string name="custom_url_scheme">com.cardscan.app</string>
+</resources>

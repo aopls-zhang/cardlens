@@ -1,0 +1,464 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (C) 2026 aopls-zhang -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#000">
+<title>拍名片</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  video{width:100%;height:100%;object-fit:cover;display:block}
+  #ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+
+  /* 小窗提示：取景过程中一直可见 */
+  #hint{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);
+        display:flex;align-items:center;gap:8px;max-width:min(92vw,420px);
+        padding:9px 15px;border-radius:999px;background:rgba(17,24,39,.78);
+        color:#fff;font-size:13.5px;font-weight:500;white-space:nowrap;
+        backdrop-filter:blur(10px);transition:background .2s;z-index:20}
+  #hint.ok{background:rgba(22,163,74,.92)}
+  #hint.warn{background:rgba(217,119,6,.92)}
+  #hint .ico{width:16px;height:16px;flex:none;border-radius:50%;border:2px solid currentColor}
+  #hint.ok .ico{border-color:#fff;background:#fff}
+  #hint.warn .ico{border-color:#fff}
+
+  #frame{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+         width:78vw;max-width:520px;aspect-ratio:1.66;border-radius:14px;
+         border:2px dashed rgba(255,255,255,.55);pointer-events:none;z-index:10;
+         transition:border-color .2s,box-shadow .2s}
+  #frame.ok{border:2px solid #16a34a;box-shadow:0 0 0 9999px rgba(0,0,0,.35),0 0 24px rgba(22,163,74,.55)}
+  #frame .corner{position:absolute;width:22px;height:22px;border:3px solid #fff;opacity:.85}
+  #frame .c1{left:-3px;top:-3px;border-right:0;border-bottom:0;border-radius:6px 0 0 0}
+  #frame .c2{right:-3px;top:-3px;border-left:0;border-bottom:0;border-radius:0 6px 0 0}
+  #frame .c3{left:-3px;bottom:-3px;border-right:0;border-top:0;border-radius:0 0 0 6px}
+  #frame .c4{right:-3px;bottom:-3px;border-left:0;border-top:0;border-radius:0 0 6px 0}
+
+  #bottom{position:fixed;left:0;right:0;bottom:0;z-index:20;
+          padding:18px 24px calc(22px + env(safe-area-inset-bottom));
+          display:flex;align-items:center;justify-content:space-between;
+          background:linear-gradient(to top,rgba(0,0,0,.72),transparent)}
+  #cancel{background:none;border:0;color:#fff;opacity:.85;font:inherit;padding:10px}
+  #shoot{width:74px;height:74px;border-radius:50%;border:4px solid rgba(255,255,255,.9);
+         background:#fff;cursor:pointer;transition:transform .12s,background .2s;position:relative}
+  #shoot:disabled{background:rgba(255,255,255,.35);border-color:rgba(255,255,255,.5);cursor:default}
+  #shoot:active{transform:scale(.94)}
+  #shoot::after{content:"";position:absolute;inset:7px;border-radius:50%;background:#e5e7eb}
+  #shoot:disabled::after{background:rgba(255,255,255,.4)}
+  #shoot.live::after{background:#16a34a}
+
+  #torch{width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.35);
+         background:rgba(255,255,255,.12);color:#fff;font-size:21px;line-height:1;
+         display:flex;align-items:center;justify-content:center;cursor:pointer;
+         transition:background .2s,color .2s}
+  #torch.on{background:#fbbf24;border-color:#fbbf24;color:#111827}
+  #torch:disabled{opacity:.32;cursor:default}
+
+  #fallback{position:fixed;inset:0;z-index:40;background:#111827;color:#fff;display:none;
+            flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center}
+  #fallback.on{display:flex}
+  #fallback p{margin:0;opacity:.8;font-size:14px;line-height:1.8}
+  #fallback button{margin-top:8px;background:#2563eb;color:#fff;border:0;border-radius:12px;
+                   padding:13px 22px;font:inherit;font-weight:600}
+  .spin{width:26px;height:26px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;
+        border-radius:50%;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="stage"><video id="v" autoplay playsinline muted></video></div>
+<canvas id="ov"></canvas>
+<div id="frame"><i class="corner c1"></i><i class="corner c2"></i><i class="corner c3"></i><i class="corner c4"></i></div>
+
+<div id="hint"><span class="ico"></span><span id="hintText">正在启动相机…</span></div>
+
+<div id="bottom">
+  <button id="cancel">取消</button>
+  <button id="shoot" disabled></button>
+  <button id="torch" disabled title="闪光灯常亮">⚡</button>
+</div>
+
+<div id="fallback">
+  <div class="spin"></div>
+  <p id="fbText">正在请求摄像头权限…</p>
+  <button id="fbAlt" style="display:none">改用系统相机</button>
+</div>
+
+<input id="fileCam" type="file" accept="image/*" capture="environment" hidden>
+
+<script>
+window.onerror = function(m, s, l){
+  var el = document.getElementById('hintText');
+  if (el) el.textContent = 'ERR ' + m + ' @' + l;
+};
+(function(){
+  var W = 160, H = 120;
+  var video = document.getElementById('v');
+  var ov = document.getElementById('ov');
+  var octx = ov.getContext('2d');
+  var hint = document.getElementById('hint');
+  var hintText = document.getElementById('hintText');
+  var frame = document.getElementById('frame');
+  var shootBtn = document.getElementById('shoot');
+  var fb = document.getElementById('fallback');
+  var fbText = document.getElementById('fbText');
+  var fbAlt = document.getElementById('fbAlt');
+
+  var work = document.createElement('canvas');
+  work.width = W; work.height = H;
+  var wctx = work.getContext('2d', {willReadFrequently: true});
+
+  var prevGray = null, lastBox = null, stableSince = 0, running = false, stream = null;
+  var torchOn = false, torchSupported = false, torchTrack = null;
+  var isDemo = new URLSearchParams(location.search).get('demo') === '1';
+  var API_BASE = (localStorage.getItem('apiBase') || '').replace(/\/+$/, '');
+  var source = video;
+
+  function makeDemo(){
+    var c = document.createElement('canvas');
+    c.width = 540; c.height = 960;
+    var g = c.getContext('2d');
+    g.fillStyle = '#111827'; g.fillRect(0, 0, 540, 960);
+    g.fillStyle = '#f8fafc'; g.fillRect(70, 330, 400, 240);
+    g.fillStyle = '#111827';
+    g.font = 'bold 40px sans-serif'; g.fillText('张伟', 100, 400);
+    g.font = '19px sans-serif';
+    g.fillText('技术总监', 100, 440);
+    g.fillText('杭州云启科技有限公司', 100, 470);
+    g.fillText('138 1234 5678', 100, 515);
+    g.fillText('zhangwei@yunqi-tech.com', 100, 540);
+    return c;
+  }
+
+  function setHint(text, cls){
+    hintText.textContent = text;
+    hint.className = cls || '';
+  }
+
+  // 轻量质量分析：亮度 / 清晰度 / 抖动 / 亮区连通域
+  function analyze(){
+    var rect = ov.getBoundingClientRect();
+    var RW = rect.width || 1, RH = rect.height || 1;
+    // 工作画布跟取景框同比例，避免拉伸导致宽高比失真
+    H = 120;
+    W = Math.max(60, Math.round(H * (RW / RH)));
+    if (work.width !== W || work.height !== H){ work.width = W; work.height = H; }
+
+    var svw = source.videoWidth || source.width || 1;
+    var svh = source.videoHeight || source.height || 1;
+    var sc = Math.max(W / svw, H / svh);
+    var dw = svw * sc, dh = svh * sc;
+    wctx.drawImage(source, (W - dw) / 2, (H - dh) / 2, dw, dh);
+
+    var img = wctx.getImageData(0, 0, W, H);
+    var d = img.data, n = W * H;
+    var gray = new Uint8Array(n);
+    var sum = 0, i, p;
+
+    for (i = 0, p = 0; i < d.length; i += 4, p++){
+      var g = (d[i] * 299 + d[i+1] * 587 + d[i+2] * 114) / 1000;
+      gray[p] = g; sum += g;
+    }
+    var mean = sum / n;
+
+    // 清晰度：相邻像素梯度均值
+    var grad = 0, gc = 0;
+    for (var y = 1; y < H - 1; y += 2){
+      for (var x = 1; x < W - 1; x += 2){
+        var k = y * W + x;
+        grad += Math.abs(gray[k] - gray[k+1]) + Math.abs(gray[k] - gray[k+W]);
+        gc++;
+      }
+    }
+    grad = gc ? grad / gc : 0;
+
+    // 抖动：与上一帧的平均差
+    var diff = 0;
+    if (prevGray){
+      for (i = 0; i < n; i += 3) diff += Math.abs(gray[i] - prevGray[i]);
+      diff = diff / (n / 3);
+    }
+    prevGray = gray;
+
+    // 亮区掩码 + 分离式膨胀：把名片上的文字孔洞填上，否则一张名片会被切成几十块
+    var th = Math.max(140, mean * 1.12);
+    var R = 7;
+    var bin = new Uint8Array(n);
+    for (i = 0; i < n; i++) bin[i] = gray[i] >= th ? 1 : 0;
+    var tmp = new Uint8Array(n), mask = new Uint8Array(n);
+    var xx, yy, kk, vv;
+    for (yy = 0; yy < H; yy++){
+      var rowo = yy * W;
+      for (xx = 0; xx < W; xx++){
+        vv = 0;
+        var xa = xx - R < 0 ? 0 : xx - R, xb = xx + R >= W ? W - 1 : xx + R;
+        for (kk = xa; kk <= xb; kk++){ if (bin[rowo + kk]){ vv = 1; break; } }
+        tmp[rowo + xx] = vv;
+      }
+    }
+    for (xx = 0; xx < W; xx++){
+      for (yy = 0; yy < H; yy++){
+        vv = 0;
+        var ya = yy - R < 0 ? 0 : yy - R, yb = yy + R >= H ? H - 1 : yy + R;
+        for (kk = ya; kk <= yb; kk++){ if (tmp[kk * W + xx]){ vv = 1; break; } }
+        mask[yy * W + xx] = vv;
+      }
+    }
+
+    var seen = new Uint8Array(n);
+    var best = null;
+    for (var s = 0; s < n; s++){
+      if (seen[s] || mask[s] < 1) continue;
+      var q = [s], head = 0, cnt = 0;
+      var x0 = W, x1 = 0, y0 = H, y1 = 0;
+      seen[s] = 1;
+      while (head < q.length){
+        var idx = q[head++];
+        var cx = idx % W, cy = (idx - cx) / W;
+        cnt++;
+        if (cx < x0) x0 = cx; if (cx > x1) x1 = cx;
+        if (cy < y0) y0 = cy; if (cy > y1) y1 = cy;
+        if (cx > 0){ var a = idx-1; if (!seen[a] && mask[a]){ seen[a]=1; q.push(a);} }
+        if (cx < W-1){ var b = idx+1; if (!seen[b] && mask[b]){ seen[b]=1; q.push(b);} }
+        if (cy > 0){ var c = idx-W; if (!seen[c] && mask[c]){ seen[c]=1; q.push(c);} }
+        if (cy < H-1){ var e = idx+W; if (!seen[e] && mask[e]){ seen[e]=1; q.push(e);} }
+      }
+      if (!best || cnt > best.area) best = {area: cnt, x0: x0, y0: y0, x1: x1, y1: y1};
+    }
+
+    var box = null;
+    if (best && best.area > n * 0.06){
+      // 缩回膨胀半径，还原名片真实边界
+      var bx0 = Math.max(0, best.x0 + R), by0 = Math.max(0, best.y0 + R);
+      var bx1 = Math.min(W - 1, best.x1 - R), by1 = Math.min(H - 1, best.y1 - R);
+      box = {x: bx0 / W, y: by0 / H,
+             w: (bx1 - bx0 + 1) / W, h: (by1 - by0 + 1) / H,
+             area: best.area / n};
+    }
+    return {mean: mean, grad: grad, diff: diff, box: box};
+  }
+
+  function decide(m){
+    if (m.mean < 55){
+      if (torchSupported && !torchOn) return ['光线太暗，开闪光灯补光', 'warn', false];
+      return [torchSupported ? '光线还是太暗，靠近一点' : '光线太暗，换个亮一点的位置', 'warn', false];
+    }
+    if (m.mean > 228) return ['画面过曝，避开强光', 'warn', false];
+    if (m.grad < 3.5) return ['画面太糊，镜头擦一下', 'warn', false];
+    if (m.diff > 14) return ['手稳一点', 'warn', false];
+
+    var b = m.box;
+    if (!b) return ['把名片放进取景框', 'warn', false];
+    if (b.area < 0.10) return ['再靠近一点', 'warn', false];
+    if (b.area > 0.75) return ['退后一点，留出边距', 'warn', false];
+    var rect0 = ov.getBoundingClientRect();
+    var ar = (b.w * rect0.width) / Math.max(1, b.h * rect0.height);
+    if (ar < 0.45 || ar > 3.4) return ['调整一下角度', 'warn', false];
+    if (b.x < 0.02 || b.y < 0.02 || b.x + b.w > 0.98 || b.y + b.h > 0.98)
+      return ['名片有遮挡，往中间放', 'warn', false];
+    return ['可以拍了', 'ok', true];
+  }
+
+  function drawOverlay(box, ok){
+    var rect = ov.getBoundingClientRect();
+    ov.width = rect.width; ov.height = rect.height;
+    octx.clearRect(0, 0, ov.width, ov.height);
+    if (!box) return;
+    // bbox 已相对取景框归一化，直接换算即可
+    octx.strokeStyle = ok ? '#16a34a' : 'rgba(255,255,255,.9)';
+    octx.lineWidth = 3;
+    octx.beginPath();
+    octx.rect(box.x * rect.width, box.y * rect.height, box.w * rect.width, box.h * rect.height);
+    octx.stroke();
+  }
+
+  function tick(){
+    if (!running) return;
+    if (!isDemo && video.readyState < 2){ requestAnimationFrame(tick); return; }
+    var m = analyze();
+    var r = decide(m);
+    if (new URLSearchParams(location.search).get('debug') === '1'){
+      document.title = m.box
+        ? 'BOX ' + [m.box.x, m.box.y, m.box.w, m.box.h].map(function(v){ return v.toFixed(2); }).join(',')
+          + ' area=' + m.box.area.toFixed(2) + ' mean=' + m.mean.toFixed(0) + ' grad=' + m.grad.toFixed(1)
+        : 'NOBOX mean=' + m.mean.toFixed(0) + ' grad=' + m.grad.toFixed(1) + ' diff=' + m.diff.toFixed(1);
+    }
+    setHint(r[0], r[1]);
+    drawOverlay(m.box, r[2]);
+    frame.classList.toggle('ok', r[2]);
+
+    if (r[2]){
+      if (!stableSince) stableSince = Date.now();
+      var steady = Date.now() - stableSince > 700;
+      shootBtn.disabled = false;
+      shootBtn.classList.toggle('live', steady);
+      if (steady) setHint('可以拍了 · 点下方按钮', 'ok');
+    } else {
+      stableSince = 0;
+      shootBtn.disabled = false;
+      shootBtn.classList.remove('live');
+    }
+    lastBox = m.box;
+    setTimeout(tick, 160);
+  }
+
+  function shoot(){
+    var svw = source.videoWidth || source.width, svh = source.videoHeight || source.height;
+    if (!svw){ return; }
+    var c = document.createElement('canvas');
+    var b = lastBox;
+    if (b){
+      // bbox 相对"取景框可视区"，换算回源图坐标
+      var rect = ov.getBoundingClientRect();
+      var sc2 = Math.max(rect.width / svw, rect.height / svh);
+      var visW = rect.width / sc2, visH = rect.height / sc2;
+      var ox2 = (svw - visW) / 2, oy2 = (svh - visH) / 2;
+      var pad = 0.03;
+      var sx = Math.max(0, ox2 + (b.x - pad) * visW);
+      var sy = Math.max(0, oy2 + (b.y - pad) * visH);
+      var sw = Math.min(svw - sx, (b.w + pad * 2) * visW);
+      var sh = Math.min(svh - sy, (b.h + pad * 2) * visH);
+      c.width = Math.round(sw); c.height = Math.round(sh);
+      c.getContext('2d').drawImage(source, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    } else {
+      c.width = vw; c.height = vh;
+      c.getContext('2d').drawImage(source, 0, 0);
+    }
+    setHint('上传中…', '');
+    c.toBlob(function(blob){ upload(blob); }, 'image/jpeg', 0.92);
+  }
+
+  function waitThenOpen(id){
+    var tries = 0;
+    setHint('识别中…', 'ok');
+    var timer = setInterval(function(){
+      tries++;
+      fetch(API_BASE + '/api/pending/' + encodeURIComponent(id))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if ((d.status && d.status !== 'queued') || tries >= 12){
+            clearInterval(timer);
+            location.href = '/?open=' + encodeURIComponent(id);
+          }
+        })
+        .catch(function(){
+          clearInterval(timer);
+          location.href = '/?open=' + encodeURIComponent(id);
+        });
+    }, 500);
+  }
+
+  function upload(blob){
+    var fd = new FormData();
+    fd.append('files', blob, 'capture.jpg');
+    fetch(API_BASE + '/api/ingest?source=camera', {method: 'POST', body: fd})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var it = (d.items || [])[0] || {};
+        if (it.pending_id){
+          // 等识别跑完再跳，否则核对页打开时字段还是空的
+          waitThenOpen(it.pending_id);
+        } else if (it.status === 'duplicate'){
+          setHint('这张已经录过了', 'warn');
+          setTimeout(function(){ setHint('把名片放进取景框', 'warn'); }, 1500);
+        } else {
+          setHint('上传失败，重试一下', 'warn');
+        }
+      })
+      .catch(function(){ setHint('上传失败，检查连接', 'warn'); });
+  }
+
+  function fallbackToFile(msg){
+    fb.classList.add('on');
+    fbText.textContent = msg;
+    fbAlt.style.display = 'block';
+  }
+
+  function setupTorch(){
+    var btn = document.getElementById('torch');
+    if (!stream){
+      btn.disabled = true;
+      btn.title = '当前环境没有可用摄像头';
+      return;
+    }
+    torchTrack = stream.getVideoTracks()[0] || null;
+    var caps = {};
+    try { caps = torchTrack && torchTrack.getCapabilities ? (torchTrack.getCapabilities() || {}) : {}; } catch(e){}
+    torchSupported = !!caps.torch;
+    btn.disabled = !torchSupported;
+    btn.title = torchSupported ? '闪光灯常亮' : '当前设备/浏览器不支持闪光灯常亮';
+    // 恢复上次选择
+    if (torchSupported && localStorage.getItem('torch') === '1') setTorch(true);
+  }
+
+  function setTorch(on){
+    if (!torchTrack) return;
+    torchTrack.applyConstraints({advanced: [{torch: on}]}).then(function(){
+      torchOn = on;
+      document.getElementById('torch').classList.toggle('on', on);
+      localStorage.setItem('torch', on ? '1' : '0');
+    }).catch(function(){
+      torchSupported = false;
+      document.getElementById('torch').disabled = true;
+      setHint('这台设备不支持闪光灯常亮', 'warn');
+    });
+  }
+
+  function start(){
+    if (isDemo){
+      source = makeDemo();
+      source.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+      video.style.display = 'none';
+      document.getElementById('stage').appendChild(source);
+      running = true;
+      setHint('演示模式', 'warn');
+      tick();
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      fallbackToFile('当前环境不支持直接调用摄像头（浏览器要求 HTTPS）');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: {facingMode: {ideal: 'environment'}, width: {ideal: 1920}, height: {ideal: 1080}},
+      audio: false
+    }).then(function(s){
+      stream = s;
+      video.srcObject = s;
+      fb.classList.remove('on');
+      setupTorch();
+      return video.play();
+    }).then(function(){
+      running = true;
+      setHint('把名片放进取景框', 'warn');
+      tick();
+    }).catch(function(err){
+      fallbackToFile('拿不到摄像头权限：' + (err && err.name ? err.name : '未知错误'));
+    });
+  }
+
+  document.getElementById('cancel').onclick = function(){
+    if (stream) stream.getTracks().forEach(function(t){ t.stop(); });
+    location.href = '/';
+  };
+  shootBtn.onclick = shoot;
+  document.getElementById('torch').onclick = function(){
+    if (!torchSupported) return;
+    setTorch(!torchOn);
+  };
+  fbAlt.onclick = function(){ document.getElementById('fileCam').click(); };
+  document.getElementById('fileCam').onchange = function(e){
+    var f = e.target.files[0];
+    if (f) upload(f);
+  };
+
+  start();
+})();
+</script>
+</body>
+</html>
