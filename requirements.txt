@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 aopls-zhang
+rapidocr>=3.0.0
+zhconv>=1.4
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+cryptography>=42.0
+qrcode[pil]>=7.4
